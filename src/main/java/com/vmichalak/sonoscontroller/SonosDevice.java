@@ -20,6 +20,7 @@ public class SonosDevice {
 
     /**
      * Play the currently selected track.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -28,24 +29,40 @@ public class SonosDevice {
     }
 
     /**
+     * Set a given stream.
+     *
+     * @param uri      URI of a stream to be played.
+     * @param metadata The track metadata to show in the player (DIDL format).
+     * @throws IOException
+     * @throws SonosControllerException
+     */
+    public void setUri(String uri, String metadata) throws IOException, SonosControllerException {
+        CommandBuilder.transport("SetAVTransportURI").put("InstanceID", "0").put("CurrentURI", uri)
+                .put("CurrentURIMetaData", metadata).executeOn(this.ip);
+    }
+
+    /**
      * Play a given stream. Pauses the queue.
-     * @param uri URI of a stream to be played.
-     * @param meta The track metadata to show in the player (DIDL format).
+     *
+     * @param uri      URI of a stream to be played.
+     * @param metadata The track metadata to show in the player (DIDL format).
      * @throws IOException
      * @throws SonosControllerException
      */
     public void playUri(String uri, String metadata) throws IOException, SonosControllerException {
-        CommandBuilder.transport("SetAVTransportURI").put("InstanceID", "0").put("CurrentURI", uri)
-                .put("CurrentURIMetaData", metadata).executeOn(this.ip);
+        this.setUri(uri, metadata);
         this.play();
     }
 
     /**
      * Play an item from the queue.
+     *
      * @param queueIndex >= 0
      */
     public void playFromQueue(int queueIndex) throws IOException, SonosControllerException {
-        if(queueIndex < 0) { throw new IllegalArgumentException("Queue index cannot be < 0."); }
+        if (queueIndex < 0) {
+            throw new IllegalArgumentException("Queue index cannot be < 0.");
+        }
         this.playUri("x-rincon-queue:" + this.getSpeakerInfo().getLocalUID() + "#0", "");
         CommandBuilder.transport("Seek").put("InstanceID", "0").put("Unit", "TRACK_NR")
                 .put("Target", String.valueOf(queueIndex)).executeOn(this.ip);
@@ -55,26 +72,58 @@ public class SonosDevice {
     /**
      * Pause current music, Play URI and resume (very useful for announcement).
      * clip is a blocking method. Take care !
-     * @param uri URI of a stream to be played.
+     *
+     * @param uri      URI of a stream to be played.
+     * @param volume   The volume of announcement.
+     * @param metadata The track metadata to show in the player (DIDL format).
+     * @throws IOException
+     * @throws SonosControllerException
+     * @throws InterruptedException
+     */
+    public void clip(String uri, int volume, String metadata) throws IOException, SonosControllerException, InterruptedException {
+        Snapshot snapshot = snapshot();
+        this.stop();
+        this.setVolume(volume);
+        this.playUri(uri, metadata);
+        while (!this.getPlayState().equals(PlayState.STOPPED)) {
+            Thread.sleep(500);
+        }
+        snapshot.restore();
+    }
+
+    /**
+     * Pause current music, Play URI and resume (very useful for announcement).
+     * clip is a blocking method. Take care !
+     *
+     * @param uri      URI of a stream to be played.
      * @param metadata The track metadata to show in the player (DIDL format).
      * @throws IOException
      * @throws SonosControllerException
      * @throws InterruptedException
      */
     public void clip(String uri, String metadata) throws IOException, SonosControllerException, InterruptedException {
-        PlayState previousState = this.getPlayState();
-        TrackInfo previous = this.getCurrentTrackInfo();
+        Snapshot snapshot = snapshot();
         this.playUri(uri, metadata);
-        while (!this.getPlayState().equals(PlayState.STOPPED)) { Thread.sleep(500); }
-        this.playUri("x-rincon-queue:" + this.getSpeakerInfo().getLocalUID() + "#0", "");
-        CommandBuilder.transport("Seek").put("InstanceID", "0").put("Unit", "TRACK_NR")
-                .put("Target", String.valueOf(previous.getQueueIndex())).executeOn(this.ip);
-        this.seek(previous.getPosition());
-        if(previousState.equals(PlayState.PLAYING)) { this.play(); } else { this.pause(); }
+        while (!this.getPlayState().equals(PlayState.STOPPED)) {
+            Thread.sleep(500);
+        }
+        snapshot.restore();
+    }
+
+    /**
+     * Dumps the current Sonos state and returns it.
+     *
+     * @return current Sonos state
+     * @throws IOException
+     * @throws SonosControllerException
+     */
+    public Snapshot snapshot() throws IOException, SonosControllerException {
+        return new Snapshot(this);
     }
 
     /**
      * Pause the currently playing track.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -84,6 +133,7 @@ public class SonosDevice {
 
     /**
      * Get the play state of the device.
+     *
      * @return current PlayState of the device
      * @throws IOException
      * @throws SonosControllerException
@@ -95,6 +145,7 @@ public class SonosDevice {
 
     /**
      * Stop the currently playing track.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -104,6 +155,7 @@ public class SonosDevice {
 
     /**
      * Seeks to a given timestamp in the current track, specified in the format HH:MM:SS.
+     *
      * @param time specified in the format HH:MM:SS.
      * @throws IOException
      * @throws SonosControllerException
@@ -115,6 +167,7 @@ public class SonosDevice {
 
     /**
      * Go to the next track on the queue.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -124,6 +177,7 @@ public class SonosDevice {
 
     /**
      * Go back to the previously played track.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -133,7 +187,8 @@ public class SonosDevice {
 
     /**
      * Adds a given track to the queue.
-     * @param uri URI of a stream to be played.
+     *
+     * @param uri      URI of a stream to be played.
      * @param metadata The track metadata to show in the player (DIDL format).
      * @throws IOException
      * @throws SonosControllerException
@@ -146,18 +201,22 @@ public class SonosDevice {
 
     /**
      * Remove a track from the queue.
+     *
      * @param queueIndex >= 0
      * @throws IOException
      * @throws SonosControllerException
      */
     public void removeFromQueue(int queueIndex) throws IOException, SonosControllerException {
-        if(queueIndex < 0) { throw new IllegalArgumentException("Queue index cannot be < 0."); }
+        if (queueIndex < 0) {
+            throw new IllegalArgumentException("Queue index cannot be < 0.");
+        }
         CommandBuilder.transport("RemoveTrackFromQueue").put("InstanceID", "0").put("ObjectID", "Q:0/" + queueIndex)
                 .put("UpdateID", "0").executeOn(this.ip);
     }
 
     /**
      * Get Current Track Info (position in the queue, duration, position, ...).
+     *
      * @return TrackInfo object.
      * @throws IOException
      * @throws SonosControllerException
@@ -167,7 +226,9 @@ public class SonosDevice {
                 .executeOn(this.ip);
         String track = ParserHelper.findOne("<Track>([0-9]*)</Track>", r);
         int trackNumber = -1;
-        if(!track.equals("NOT_IMPLEMENTED") && !track.equals("")) { trackNumber = Integer.valueOf(track); }
+        if (!track.equals("NOT_IMPLEMENTED") && !track.equals("")) {
+            trackNumber = Integer.valueOf(track);
+        }
         return new TrackInfo(
                 trackNumber,
                 ParserHelper.findOne("<TrackDuration>([0-9]*:[0-9]*:[0-9]*)</TrackDuration>", r),
@@ -179,6 +240,7 @@ public class SonosDevice {
 
     /**
      * Get the play mode for the queue.
+     *
      * @return current PlayMode of the queue
      * @throws IOException
      * @throws SonosControllerException
@@ -190,6 +252,7 @@ public class SonosDevice {
 
     /**
      * Sets the play mode for the queue.
+     *
      * @param playMode
      * @throws IOException
      * @throws SonosControllerException
@@ -201,6 +264,7 @@ public class SonosDevice {
 
     /**
      * Remove all tracks from the queue.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -210,6 +274,7 @@ public class SonosDevice {
 
     /**
      * Return if the Sonos is joined with another one.
+     *
      * @return True if is joined, false if is isn't
      * @throws IOException
      * @throws SonosControllerException
@@ -220,6 +285,7 @@ public class SonosDevice {
 
     /**
      * Get all Sonos speaker joined with this speaker.
+     *
      * @return List of Sonos speaker joined with this speaker.
      * @throws IOException
      * @throws SonosControllerException
@@ -230,6 +296,7 @@ public class SonosDevice {
 
     /**
      * Join this Sonos speaker to another.
+     *
      * @param master master speaker
      * @throws IOException
      * @throws SonosControllerException
@@ -240,6 +307,7 @@ public class SonosDevice {
 
     /**
      * Join this Sonos speaker to another.
+     *
      * @param masterUID master speaker UID
      * @throws IOException
      * @throws SonosControllerException
@@ -252,6 +320,7 @@ public class SonosDevice {
 
     /**
      * Remove this speaker from a group.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -262,6 +331,7 @@ public class SonosDevice {
 
     /**
      * Switch the speaker's input to line-in.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -274,6 +344,7 @@ public class SonosDevice {
     /**
      * Switch the speaker's input to TV input.
      * /!\ WARNING: WORKS ONLY WITH PLAYBAR / PLAYBASE /!\
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -290,6 +361,7 @@ public class SonosDevice {
 
     /**
      * Get the Sonos speaker volume.
+     *
      * @return A volume value between 0 and 100
      * @throws IOException
      * @throws SonosControllerException
@@ -302,6 +374,7 @@ public class SonosDevice {
 
     /**
      * Set the Sonos speaker volume.
+     *
      * @param volume A volume value between 0 and 100
      * @throws IOException
      * @throws SonosControllerException
@@ -313,6 +386,7 @@ public class SonosDevice {
 
     /**
      * Return the mute state of the Sonos speaker.
+     *
      * @return True if is muted, false if isn't
      * @throws IOException
      * @throws SonosControllerException
@@ -325,6 +399,7 @@ public class SonosDevice {
 
     /**
      * Mute or unmute the Sonos speaker.
+     *
      * @param state True to mute, False to unmute
      * @throws IOException
      * @throws SonosControllerException
@@ -336,6 +411,7 @@ public class SonosDevice {
 
     /**
      * Mute or unmute the speaker.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -345,6 +421,7 @@ public class SonosDevice {
 
     /**
      * Get the Sonos speaker bass EQ.
+     *
      * @return value between 10 and -10
      * @throws IOException
      * @throws SonosControllerException
@@ -357,18 +434,22 @@ public class SonosDevice {
 
     /**
      * Set the Sonos speaker bass EQ.
+     *
      * @param bass Value between 10 and -10
      * @throws IOException
      * @throws SonosControllerException
      */
     public void setBass(int bass) throws IOException, SonosControllerException {
-        if(bass > 10 || bass < -10) { throw new IllegalArgumentException("Bass value need to be between 10 and -10"); }
+        if (bass > 10 || bass < -10) {
+            throw new IllegalArgumentException("Bass value need to be between 10 and -10");
+        }
         CommandBuilder.rendering("SetBass").put("InstanceID", "0").put("DesiredBass", String.valueOf(bass))
                 .executeOn(this.ip);
     }
-    
+
     /**
      * Get the Sonos speaker's loudness compensation.
+     *
      * @return True if is On, False if isn't
      * @throws IOException
      * @throws SonosControllerException
@@ -381,6 +462,7 @@ public class SonosDevice {
 
     /**
      * Set the Sonos speaker's loudness compensation.
+     *
      * @param loudness True for set On, False for set Off
      * @throws IOException
      * @throws SonosControllerException
@@ -392,6 +474,7 @@ public class SonosDevice {
 
     /**
      * Get the Sonos speaker's treble EQ.
+     *
      * @return value between -10 and 10
      * @throws IOException
      * @throws SonosControllerException
@@ -404,12 +487,15 @@ public class SonosDevice {
 
     /**
      * Set the Sonos speaker's treble EQ.
+     *
      * @param treble value between -10 and 10
      * @throws IOException
      * @throws SonosControllerException
      */
     public void setTreble(int treble) throws IOException, SonosControllerException {
-        if(treble > 10 || treble < -10) { throw new IllegalArgumentException("treble value need to be between 10 and -10"); }
+        if (treble > 10 || treble < -10) {
+            throw new IllegalArgumentException("treble value need to be between 10 and -10");
+        }
         CommandBuilder.rendering("SetTreble").put("InstanceID", "0").put("DesiredTreble", String.valueOf(treble))
                 .executeOn(this.ip);
     }
@@ -417,6 +503,7 @@ public class SonosDevice {
     /**
      * Check if the Night Mode is activated or not.
      * /!\ WARNING: WORKS ONLY WITH PLAYBAR / PLAYBASE /!\
+     *
      * @return True if activated, False if isn't.
      * @throws IOException
      * @throws SonosControllerException
@@ -430,6 +517,7 @@ public class SonosDevice {
     /**
      * Set the Night Mode.
      * /!\ WARNING: WORKS ONLY WITH PLAYBAR / PLAYBASE /!\
+     *
      * @param state
      * @throws IOException
      * @throws SonosControllerException
@@ -441,6 +529,7 @@ public class SonosDevice {
 
     /**
      * Turn On / Off the Night Mode.
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -451,6 +540,7 @@ public class SonosDevice {
     /**
      * Check if the Dialog Mode is activated or not.
      * /!\ WARNING: WORKS ONLY WITH PLAYBAR / PLAYBASE /!\
+     *
      * @return True if activated, False if isn't.
      * @throws IOException
      * @throws SonosControllerException
@@ -464,6 +554,7 @@ public class SonosDevice {
     /**
      * Set the Dialog Mode.
      * /!\ WARNING: WORKS ONLY WITH PLAYBAR / PLAYBASE /!\
+     *
      * @param state
      * @throws IOException
      * @throws SonosControllerException
@@ -476,6 +567,7 @@ public class SonosDevice {
     /**
      * Turn On / Off the Night Mode.
      * /!\ WARNING: WORKS ONLY WITH PLAYBAR / PLAYBASE /!\
+     *
      * @throws IOException
      * @throws SonosControllerException
      */
@@ -545,6 +637,7 @@ public class SonosDevice {
 
     /**
      * Check if the speaker is a group coordinator or not.
+     *
      * @return True if the speaker is a group coordinator, otherwise False.
      * @throws IOException
      * @throws SonosControllerException
@@ -559,6 +652,7 @@ public class SonosDevice {
 
     /**
      * Get information about the Sonos speaker.
+     *
      * @return Information about the Sonos speaker, such as the UID, MAC Address, and Zone Name.
      * @throws IOException
      * @throws SonosControllerException
@@ -566,43 +660,43 @@ public class SonosDevice {
     public SonosSpeakerInfo getSpeakerInfo() throws IOException, SonosControllerException {
         String responseString = CommandBuilder.downloadSpeakerInfo(this.ip);
 
-        String zoneName                 = ParserHelper.findOne("<ZoneName>(.*)</ZoneName>", responseString);
-        String zoneIcon                 = ParserHelper.findOne("<ZoneIcon>(.*)</ZoneIcon>", responseString);
-        String configuration            = ParserHelper.findOne("<Configuration>(.*)</Configuration>", responseString);
-        String localUID                 = ParserHelper.findOne("<LocalUID>(.*)</LocalUID>", responseString);
-        String serialNumber             = ParserHelper.findOne("<SerialNumber>(.*)</SerialNumber>", responseString);
-        String softwareVersion          = ParserHelper.findOne("<SoftwareVersion>(.*)</SoftwareVersion>",
-                                        responseString);
-        String softwareDate             = ParserHelper.findOne("<SoftwareDate>(.*)</SoftwareDate>", responseString);
-        String softwareScm              = ParserHelper.findOne("<SoftwareScm>(.*)</SoftwareScm>", responseString);
-        String minCompatibleVersion     = ParserHelper.findOne("<MinCompatibleVersion>(.*)</MinCompatibleVersion>",
-                                        responseString);
-        String legacyCompatibleVersion  = ParserHelper.findOne("<LegacyCompatibleVersion>(.*)</LegacyCompatibleVersion>"
-                                        , responseString);
-        String hardwareVersion          = ParserHelper.findOne("<HardwareVersion>(.*)</HardwareVersion>",
-                                        responseString);
-        String dspVersion               = ParserHelper.findOne("<DspVersion>(.*)</DspVersion>", responseString);
-        String hwFlags                  = ParserHelper.findOne("<HwFlags>(.*)</HwFlags>", responseString);
-        String hwFeatures               = ParserHelper.findOne("<HwFeatures>(.*)</HwFeatures>", responseString);
-        String variant                  = ParserHelper.findOne("<Variant>(.*)</Variant>", responseString);
-        String generalFlags             = ParserHelper.findOne("<GeneralFlags>(.*)</GeneralFlags>", responseString);
-        String ipAddress                = ParserHelper.findOne("<IPAddress>(.*)</IPAddress>", responseString);
-        String macAddress               = ParserHelper.findOne("<MACAddress>(.*)</MACAddress>", responseString);
-        String copyright                = ParserHelper.findOne("<Copyright>(.*)</Copyright>", responseString);
-        String extraInfo                = ParserHelper.findOne("<ExtraInfo>(.*)</ExtraInfo>", responseString);
-        String htAudioInCode            = ParserHelper.findOne("<HTAudioInCode>(.*)</HTAudioInCode>", responseString);
-        String idxTrk                   = ParserHelper.findOne("<IdxTrk>(.*)</IdxTrk>", responseString);
-        String mdp2Ver                  = ParserHelper.findOne("<MDP2Ver>(.*)</MDP2Ver>", responseString);
-        String mdp3Ver                  = ParserHelper.findOne("<MDP3Ver>(.*)</MDP3Ver>", responseString);
-        String relBuild                 = ParserHelper.findOne("<RelBuild>(.*)</RelBuild>", responseString);
-        String whitelistBuild           = ParserHelper.findOne("<WhitelistBuild>(.*)</WhitelistBuild>", responseString);
-        String prodUnit                 = ParserHelper.findOne("<ProdUnit>(.*)</ProdUnit>", responseString);
-        String fuseCfg                  = ParserHelper.findOne("<FuseCfg>(.*)</FuseCfg>", responseString);
-        String revokeFuse               = ParserHelper.findOne("<RevokeFuse>(.*)</RevokeFuse>", responseString);
-        String authFlags                = ParserHelper.findOne("<AuthFlags>(.*)</AuthFlags>", responseString);
-        String swFeatures               = ParserHelper.findOne("<SwFeatures>(.*)</SwFeatures>", responseString);
-        String regState                 = ParserHelper.findOne("<RegState>(.*)</RegState>", responseString);
-        String customerID               = ParserHelper.findOne("<CustomerID>(.*)</CustomerID>", responseString);
+        String zoneName = ParserHelper.findOne("<ZoneName>(.*)</ZoneName>", responseString);
+        String zoneIcon = ParserHelper.findOne("<ZoneIcon>(.*)</ZoneIcon>", responseString);
+        String configuration = ParserHelper.findOne("<Configuration>(.*)</Configuration>", responseString);
+        String localUID = ParserHelper.findOne("<LocalUID>(.*)</LocalUID>", responseString);
+        String serialNumber = ParserHelper.findOne("<SerialNumber>(.*)</SerialNumber>", responseString);
+        String softwareVersion = ParserHelper.findOne("<SoftwareVersion>(.*)</SoftwareVersion>",
+                responseString);
+        String softwareDate = ParserHelper.findOne("<SoftwareDate>(.*)</SoftwareDate>", responseString);
+        String softwareScm = ParserHelper.findOne("<SoftwareScm>(.*)</SoftwareScm>", responseString);
+        String minCompatibleVersion = ParserHelper.findOne("<MinCompatibleVersion>(.*)</MinCompatibleVersion>",
+                responseString);
+        String legacyCompatibleVersion = ParserHelper.findOne("<LegacyCompatibleVersion>(.*)</LegacyCompatibleVersion>"
+                , responseString);
+        String hardwareVersion = ParserHelper.findOne("<HardwareVersion>(.*)</HardwareVersion>",
+                responseString);
+        String dspVersion = ParserHelper.findOne("<DspVersion>(.*)</DspVersion>", responseString);
+        String hwFlags = ParserHelper.findOne("<HwFlags>(.*)</HwFlags>", responseString);
+        String hwFeatures = ParserHelper.findOne("<HwFeatures>(.*)</HwFeatures>", responseString);
+        String variant = ParserHelper.findOne("<Variant>(.*)</Variant>", responseString);
+        String generalFlags = ParserHelper.findOne("<GeneralFlags>(.*)</GeneralFlags>", responseString);
+        String ipAddress = ParserHelper.findOne("<IPAddress>(.*)</IPAddress>", responseString);
+        String macAddress = ParserHelper.findOne("<MACAddress>(.*)</MACAddress>", responseString);
+        String copyright = ParserHelper.findOne("<Copyright>(.*)</Copyright>", responseString);
+        String extraInfo = ParserHelper.findOne("<ExtraInfo>(.*)</ExtraInfo>", responseString);
+        String htAudioInCode = ParserHelper.findOne("<HTAudioInCode>(.*)</HTAudioInCode>", responseString);
+        String idxTrk = ParserHelper.findOne("<IdxTrk>(.*)</IdxTrk>", responseString);
+        String mdp2Ver = ParserHelper.findOne("<MDP2Ver>(.*)</MDP2Ver>", responseString);
+        String mdp3Ver = ParserHelper.findOne("<MDP3Ver>(.*)</MDP3Ver>", responseString);
+        String relBuild = ParserHelper.findOne("<RelBuild>(.*)</RelBuild>", responseString);
+        String whitelistBuild = ParserHelper.findOne("<WhitelistBuild>(.*)</WhitelistBuild>", responseString);
+        String prodUnit = ParserHelper.findOne("<ProdUnit>(.*)</ProdUnit>", responseString);
+        String fuseCfg = ParserHelper.findOne("<FuseCfg>(.*)</FuseCfg>", responseString);
+        String revokeFuse = ParserHelper.findOne("<RevokeFuse>(.*)</RevokeFuse>", responseString);
+        String authFlags = ParserHelper.findOne("<AuthFlags>(.*)</AuthFlags>", responseString);
+        String swFeatures = ParserHelper.findOne("<SwFeatures>(.*)</SwFeatures>", responseString);
+        String regState = ParserHelper.findOne("<RegState>(.*)</RegState>", responseString);
+        String customerID = ParserHelper.findOne("<CustomerID>(.*)</CustomerID>", responseString);
 
         return new SonosSpeakerInfo(zoneName, zoneIcon, configuration, localUID, serialNumber, softwareVersion,
                 softwareDate, softwareScm, minCompatibleVersion, legacyCompatibleVersion, hardwareVersion, dspVersion,
